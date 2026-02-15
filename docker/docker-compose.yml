@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: barsoft-rabbitmq
+    ports:
+      - "5672:5672"     # AMQP port
+      - "15672:15672"   # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - barsoft-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  dbwatcher:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.DbWatcher
+    container_name: barsoft-dbwatcher
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      # Windows Auth için host.docker.internal kullanıyoruz
+      ConnectionStrings__BarsoftDb: "Data Source=host.docker.internal;Database=BARSOFT;Integrated Security=true;TrustServerCertificate=true;"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: 5672
+      RabbitMQ__Username: admin
+      RabbitMQ__Password: admin123
+      Polling__InitialIntervalMs: 5000
+      Polling__MinIntervalMs: 1000
+      Polling__MaxIntervalMs: 10000
+      Polling__BatchSize: 100
+    networks:
+      - barsoft-network
+    restart: unless-stopped
+    # Windows SQL Server'a erişim için
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  signalrhub:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.SignalRHub
+    container_name: barsoft-signalrhub
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "5000:8080"    # HTTP
+      - "5001:8081"    # HTTPS
+    environment:
+      ConnectionStrings__BarsoftDb: "Data Source=host.docker.internal;Database=BARSOFT;Integrated Security=true;TrustServerCertificate=true;"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: 5672
+      RabbitMQ__Username: admin
+      RabbitMQ__Password: admin123
+      JWT__Secret: "barsoft-signalrhub-super-secret-jwt-key-min-32-chars-required-for-security"
+      JWT__Issuer: "BarsoftSignalRHub"
+      JWT__Audience: "BarsoftClients"
+      JWT__ExpirationMinutes: 480
+      ASPNETCORE_URLS: "http://+:8080;https://+:8081"
+      ASPNETCORE_HTTPS_PORT: 8081
+    networks:
+      - barsoft-network
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  rabbitmq_data:
+    driver: local
+
+networks:
+  barsoft-network:
+    driver: bridge

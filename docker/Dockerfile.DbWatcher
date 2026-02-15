@@ -1,0 +1,36 @@
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy solution and project files
+COPY ["Barsoft.SignalRHub.sln", "./"]
+COPY ["src/Barsoft.SignalRHub.DbWatcher/Barsoft.SignalRHub.DbWatcher.csproj", "src/Barsoft.SignalRHub.DbWatcher/"]
+COPY ["src/Barsoft.SignalRHub.Domain/Barsoft.SignalRHub.Domain.csproj", "src/Barsoft.SignalRHub.Domain/"]
+COPY ["src/Barsoft.SignalRHub.Application/Barsoft.SignalRHub.Application.csproj", "src/Barsoft.SignalRHub.Application/"]
+COPY ["src/Barsoft.SignalRHub.Infrastructure/Barsoft.SignalRHub.Infrastructure.csproj", "src/Barsoft.SignalRHub.Infrastructure/"]
+COPY ["src/Barsoft.SignalRHub.Shared/Barsoft.SignalRHub.Shared.csproj", "src/Barsoft.SignalRHub.Shared/"]
+
+# Restore dependencies
+RUN dotnet restore "src/Barsoft.SignalRHub.DbWatcher/Barsoft.SignalRHub.DbWatcher.csproj"
+
+# Copy source code
+COPY . .
+
+# Build
+WORKDIR "/src/src/Barsoft.SignalRHub.DbWatcher"
+RUN dotnet build "Barsoft.SignalRHub.DbWatcher.csproj" -c Release -o /app/build
+
+# Publish
+FROM build AS publish
+RUN dotnet publish "Barsoft.SignalRHub.DbWatcher.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD ps aux | grep -v grep | grep -q dotnet || exit 1
+
+ENTRYPOINT ["dotnet", "Barsoft.SignalRHub.DbWatcher.dll"]
