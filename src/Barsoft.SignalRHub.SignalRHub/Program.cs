@@ -1,7 +1,10 @@
 using Barsoft.SignalRHub.Application.Interfaces;
+using Barsoft.SignalRHub.Infrastructure.Messaging;
 using Barsoft.SignalRHub.Infrastructure.Persistence;
 using Barsoft.SignalRHub.Infrastructure.Persistence.Repositories;
 using Barsoft.SignalRHub.Infrastructure.Security;
+using Barsoft.SignalRHub.SignalRHub.BackgroundServices;
+using Barsoft.SignalRHub.SignalRHub.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -85,14 +88,37 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+// ===== RabbitMQ Configuration =====
+var rabbitMqSettings = configuration.GetSection(RabbitMqSettings.SectionName).Get<RabbitMqSettings>()
+    ?? throw new InvalidOperationException("RabbitMQ settings not found in configuration");
+
+rabbitMqSettings.Validate();
+
+builder.Services.Configure<RabbitMqSettings>(configuration.GetSection(RabbitMqSettings.SectionName));
+
+// ===== SignalR Configuration =====
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+    options.MaximumReceiveMessageSize = 32 * 1024; // 32 KB
+});
+
+// ===== Background Services =====
+builder.Services.AddHostedService<RabbitMqConsumerService>();
+
 // ===== CORS Configuration =====
 builder.Services.AddCors(options =>
 {
+    // Development: Allow all (SignalR requires AllowCredentials)
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.SetIsOriginAllowed(_ => true) // Allow any origin in development
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials(); // Required for SignalR
     });
 
     // Production: Use specific origins
@@ -158,6 +184,9 @@ app.UseAuthorization();
 // Controllers
 app.MapControllers();
 
+// SignalR Hub
+app.MapHub<StokHareketHub>("/hubs/stokhareket");
+
 // Health check endpoint
 app.MapGet("/health", () => new
 {
@@ -171,5 +200,7 @@ app.MapGet("/health", () => new
 // ===== Run Application =====
 app.Logger.LogInformation("Barsoft SignalR Hub API starting...");
 app.Logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
+app.Logger.LogInformation("SignalR Hub: /hubs/stokhareket");
+app.Logger.LogInformation("RabbitMQ: {Host}:{Port}", rabbitMqSettings.Host, rabbitMqSettings.Port);
 
 app.Run();
