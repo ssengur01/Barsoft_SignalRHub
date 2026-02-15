@@ -341,6 +341,126 @@ ORDER BY ID ASC
 
 ## 🧪 Testing
 
+### Test Data Setup
+
+Test kullanıcıları ve örnek veri oluştur:
+
+```bash
+# SQL Server'a bağlan ve test data script'i çalıştır
+sqlcmd -S MSI -d BARSOFT -i test/sql/test-data.sql
+
+# Script otomatik oluşturur:
+# - 5 test kullanıcı (admin, 0001, 0002, 0003, inactive)
+# - 15 örnek stok hareketi (her şube için 5'er)
+# - Varsayılan şifre: password
+```
+
+### Full System Test
+
+**1. Servisleri Başlat:**
+
+```bash
+# Terminal 1: RabbitMQ
+cd docker
+docker-compose up -d rabbitmq
+
+# Terminal 2: DB Watcher
+cd src/Barsoft.SignalRHub.DbWatcher
+dotnet run
+
+# Terminal 3: SignalR Hub
+cd src/Barsoft.SignalRHub.SignalRHub
+dotnet run
+```
+
+**2. Client Demo Aç:**
+
+Tarayıcıda açın:
+```
+file:///path/to/test/client-demo/signalr-demo.html
+```
+
+veya HTTP server ile:
+```bash
+cd test/client-demo
+python -m http.server 8080
+# http://localhost:8080/signalr-demo.html
+```
+
+**3. Login ve Test:**
+
+- **User:** `0001` (Branch 1 access)
+- **Password:** `password`
+- "Login & Connect" tıkla
+- Event log'u izle
+
+**4. Real-time Event Test:**
+
+```sql
+-- SQL Server'da yeni kayıt ekle
+USE BARSOFT;
+
+INSERT INTO TBL_STOK_HAREKET (
+    STOKID, BELGEKODU, BELGETARIHI, MIKTAR, TOPLAMTUTAR,
+    CREATEDATE, CREATEUSERID, MASRAFMERKEZIID,
+    BIRIMID, BIRIMCARPAN, BIRIMFIYATI, DEPOID, KDV, DOVIZID,
+    DOVIZTUTARI, KDVTUTARI, INDIRIMTUTARI, ARTIRIMTUTARI,
+    DETAYID, ACIKLAMA, HAREKETTIPID
+)
+VALUES (
+    100, 'TEST-001', GETDATE(), 10.0, 1000.0,
+    GETDATE(), 1, 1, -- MasrafMerkeziId=1 (Branch 1)
+    1, 1.0, 100.0, 1, 18.0, 1,
+    1000.0, 180.0, 0.0, 0.0,
+    1, 'Real-time Test Event', 1
+);
+```
+
+**Beklenen Sonuç:**
+- DB Watcher: "Detected 1 changes" (max 10 saniye)
+- RabbitMQ: Message published
+- SignalR Client: Event görünür (yeşil renk)
+
+### Multi-Tenant Test
+
+**İki tarayıcı/tab aç:**
+
+**Tab 1:** User `0001` (SubeIds: [1])
+**Tab 2:** User `0002` (SubeIds: [2])
+
+**Database INSERT:**
+```sql
+-- Branch 1 event
+INSERT INTO TBL_STOK_HAREKET (..., MASRAFMERKEZIID) VALUES (..., 1);
+
+-- Branch 2 event
+INSERT INTO TBL_STOK_HAREKET (..., MASRAFMERKEZIID) VALUES (..., 2);
+```
+
+**Beklenen:**
+- Tab 1: Sadece Branch 1 event'ini görür
+- Tab 2: Sadece Branch 2 event'ini görür
+
+### Test Scenarios
+
+Detaylı test senaryoları için:
+```bash
+cat test/TEST_SCENARIOS.md
+```
+
+**Kapsanan senaryolar:**
+- ✅ Authentication & Authorization
+- ✅ SignalR Connection & Reconnection
+- ✅ Real-time Event Broadcasting
+- ✅ Multi-Tenant Branch Filtering
+- ✅ DB Watcher Adaptive Polling
+- ✅ RabbitMQ Integration
+- ✅ Error Handling & Recovery
+- ✅ Performance & Load Testing
+- ✅ Security (Token validation, etc.)
+
+### Unit & Integration Tests
+
 ```bash
 # Unit tests
 dotnet test
@@ -348,6 +468,31 @@ dotnet test
 # Integration tests (Docker gerekli)
 docker-compose -f docker/docker-compose.yml up -d
 dotnet test --filter Category=Integration
+```
+
+### Monitoring During Tests
+
+**RabbitMQ Management:**
+```
+http://localhost:15672 (admin/admin123)
+- Queues → barsoft.stok.queue
+- Message rate görüntüleme
+- Consumer connection kontrolü
+```
+
+**Application Logs:**
+```bash
+# DB Watcher logs
+docker logs -f barsoft-dbwatcher
+
+# SignalR Hub logs
+docker logs -f barsoft-signalrhub
+```
+
+**Health Check:**
+```bash
+curl https://localhost:5001/health
+# Response: {"status":"Healthy","timestamp":"2026-02-15T...","environment":"Development"}
 ```
 
 ---
@@ -425,11 +570,11 @@ docker logs barsoft-signalrhub
 | Faz | Durum | Açıklama |
 |-----|-------|----------|
 | **FAZ 1** | ✅ **TAMAMLANDI** | Mimari tasarım, Solution yapısı, Docker, CI/CD |
-| **FAZ 2** | ⏳ Bekliyor | Entity configurations + EF Core DbContext |
-| **FAZ 3** | ⏳ Bekliyor | JWT authentication + Login API |
-| **FAZ 4** | ⏳ Bekliyor | DB Watcher Service + RabbitMQ Producer |
-| **FAZ 5** | ⏳ Bekliyor | SignalR Hub + RabbitMQ Consumer |
-| **FAZ 6** | ⏳ Bekliyor | Client demo + User filtering |
+| **FAZ 2** | ✅ **TAMAMLANDI** | Entity configurations + EF Core DbContext |
+| **FAZ 3** | ✅ **TAMAMLANDI** | JWT authentication + Login API |
+| **FAZ 4** | ✅ **TAMAMLANDI** | DB Watcher Service + RabbitMQ Producer |
+| **FAZ 5** | ✅ **TAMAMLANDI** | SignalR Hub + RabbitMQ Consumer |
+| **FAZ 6** | ✅ **TAMAMLANDI** | Client demo + User filtering + Test documentation |
 | **FAZ 7** | ⏳ Bekliyor | Full CI/CD pipeline + Deploy docs |
 
 ---
