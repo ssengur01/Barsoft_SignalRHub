@@ -10,4 +10,11 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.13" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Barsoft.SignalRHub.Domain\Barsoft.SignalRHub.Domain.csproj" />
+    <ProjectReference Include="..\Barsoft.SignalRHub.Application\Barsoft.SignalRHub.Application.csproj" />
+    <ProjectReference Include="..\Barsoft.SignalRHub.Infrastructure\Barsoft.SignalRHub.Infrastructure.csproj" />
+    <ProjectReference Include="..\Barsoft.SignalRHub.Shared\Barsoft.SignalRHub.Shared.csproj" />
+  </ItemGroup>
+
 </Project>

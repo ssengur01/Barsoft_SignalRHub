@@ -1,5 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <ProjectReference Include="..\Barsoft.SignalRHub.Domain\Barsoft.SignalRHub.Domain.csproj" />
+    <ProjectReference Include="..\Barsoft.SignalRHub.Application\Barsoft.SignalRHub.Application.csproj" />
+    <ProjectReference Include="..\Barsoft.SignalRHub.Shared\Barsoft.SignalRHub.Shared.csproj" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
