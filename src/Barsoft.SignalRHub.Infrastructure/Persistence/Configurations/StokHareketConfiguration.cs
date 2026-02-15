@@ -97,8 +97,8 @@ public class StokHareketConfiguration : IEntityTypeConfiguration<StokHareket>
             .HasColumnType("decimal(18,2)")
             .IsRequired();
 
-        builder.Property(e => e.ArttırimTutari)
-            .HasColumnName("ARTIRIMTUTARI")
+        builder.Property(e => e.ArttirimTutari)
+            .HasColumnName("ARTTIRIMTUTARI")
             .HasColumnType("decimal(18,2)")
             .IsRequired();
 

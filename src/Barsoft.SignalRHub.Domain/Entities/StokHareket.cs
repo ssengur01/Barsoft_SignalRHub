@@ -32,7 +32,7 @@ public class StokHareket
     public decimal DovizTutari { get; set; }
     public decimal KdvTutari { get; set; }
     public decimal IndirimTutari { get; set; }
-    public decimal ArttırimTutari { get; set; }
+    public decimal ArttirimTutari { get; set; }
     public decimal ToplamTutar { get; set; }
 
     // İlişkili varlıklar

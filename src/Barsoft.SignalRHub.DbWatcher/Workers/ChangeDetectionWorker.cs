@@ -38,7 +38,7 @@ public class ChangeDetectionWorker : BackgroundService
         _trackingInfo = new ChangeTrackingInfo
         {
             LastProcessedId = 0,
-            LastProcessedDate = DateTime.MinValue,
+            LastProcessedDate = new DateTime(1900, 1, 1), // SQL Server safe minimum date
             CurrentIntervalMs = MinIntervalMs,
             LastQueryTime = DateTime.UtcNow
         };
