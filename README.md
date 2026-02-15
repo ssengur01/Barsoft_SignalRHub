@@ -499,26 +499,161 @@ curl https://localhost:5001/health
 
 ## 🚢 Deployment
 
-### Docker Compose ile Production
+### Quick Start (Docker)
 
+**Production deployment in 3 steps:**
+
+```bash
+# 1. Clone repository
+git clone https://github.com/ssengur01/Barsoft_SignalRHub.git
+cd Barsoft_SignalRHub
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env: DB connection, RabbitMQ credentials, JWT secret
+
+# 3. Deploy with Docker Compose
+cd docker
+docker-compose up -d
+
+# Verify
+docker-compose ps
+curl http://localhost:5000/health
+```
+
+### Docker Compose (Recommended)
+
+**Start all services:**
 ```bash
 cd docker
 docker-compose up -d
 ```
 
+**Services:**
+- **RabbitMQ:** localhost:5672 (AMQP), localhost:15672 (Management UI)
+- **DB Watcher:** Background service (adaptive polling)
+- **SignalR Hub:** localhost:5000 (HTTP), localhost:5001 (HTTPS)
+
+**View logs:**
+```bash
+docker-compose logs -f signalrhub
+docker-compose logs -f dbwatcher
+```
+
+**Stop services:**
+```bash
+docker-compose down
+```
+
 ### Manuel Deployment
 
-1. Publish projeler:
+**1. Prerequisites:**
+- .NET 9.0 Runtime
+- RabbitMQ Server
+- SQL Server access (read-only)
+
+**2. Build & Publish:**
 ```bash
-dotnet publish -c Release -o ./publish/dbwatcher src/Barsoft.SignalRHub.DbWatcher
-dotnet publish -c Release -o ./publish/signalrhub src/Barsoft.SignalRHub.SignalRHub
+# DbWatcher
+dotnet publish src/Barsoft.SignalRHub.DbWatcher/Barsoft.SignalRHub.DbWatcher.csproj \
+  -c Release -o /opt/barsoft/dbwatcher
+
+# SignalRHub
+dotnet publish src/Barsoft.SignalRHub.SignalRHub/Barsoft.SignalRHub.SignalRHub.csproj \
+  -c Release -o /opt/barsoft/signalrhub
 ```
 
-2. Sistemik servis olarak çalıştır (Windows):
+**3. Configure:**
 ```bash
-sc create BarsoftDbWatcher binPath="C:\path\to\Barsoft.SignalRHub.DbWatcher.exe"
-sc create BarsoftSignalRHub binPath="C:\path\to\Barsoft.SignalRHub.SignalRHub.exe"
+# Edit appsettings.Production.json
+# - Database connection string
+# - RabbitMQ settings
+# - JWT secret (min 32 chars)
 ```
+
+**4. Windows Service:**
+```bash
+sc create BarsoftDbWatcher binPath="C:\opt\barsoft\dbwatcher\Barsoft.SignalRHub.DbWatcher.exe" start=auto
+sc create BarsoftSignalRHub binPath="C:\opt\barsoft\signalrhub\Barsoft.SignalRHub.SignalRHub.exe" start=auto
+sc start BarsoftDbWatcher
+sc start BarsoftSignalRHub
+```
+
+**5. Linux Systemd:**
+```bash
+# Create systemd service files
+sudo systemctl enable barsoft-dbwatcher barsoft-signalrhub
+sudo systemctl start barsoft-dbwatcher barsoft-signalrhub
+```
+
+### Production Checklist
+
+**Pre-Deployment:**
+- [ ] SQL Server accessible (read-only user)
+- [ ] Test data created (`test/sql/test-data.sql`)
+- [ ] RabbitMQ installed
+- [ ] Firewall configured (ports 5000, 5001, 5672, 15672)
+- [ ] SSL certificates ready
+
+**Security:**
+- [ ] Change default RabbitMQ password
+- [ ] Generate strong JWT secret (`openssl rand -base64 64`)
+- [ ] Enable HTTPS (production)
+- [ ] Configure CORS (specific origins, not `*`)
+- [ ] Restrict SQL access (read-only)
+
+**Post-Deployment:**
+- [ ] Health check passing: `curl http://localhost:5000/health`
+- [ ] RabbitMQ queue created: `barsoft.stok.queue`
+- [ ] Test client connected
+- [ ] Events flowing (check logs)
+- [ ] No errors in logs
+
+### Environment Variables
+
+**Database:**
+```bash
+ConnectionStrings__BarsoftDb="Data Source=SERVER;Database=BARSOFT;..."
+```
+
+**RabbitMQ:**
+```bash
+RabbitMQ__Host=localhost
+RabbitMQ__Port=5672
+RabbitMQ__Username=admin
+RabbitMQ__Password=CHANGE_ME
+```
+
+**JWT:**
+```bash
+JWT__Secret=YOUR_SECRET_MIN_32_CHARS
+JWT__Issuer=BarsoftSignalRHub
+JWT__Audience=BarsoftClients
+JWT__ExpirationMinutes=480
+```
+
+### Scaling
+
+**Horizontal Scaling (SignalR Hub):**
+```yaml
+# docker-compose.yml
+signalrhub:
+  deploy:
+    replicas: 3
+```
+
+**Load Balancer:**
+- Use Nginx/HAProxy
+- Enable sticky sessions (SignalR requirement)
+- Health check: `/health`
+
+**Database:**
+- Use SQL Server read replica
+- Connection pooling enabled
+
+**RabbitMQ:**
+- Cluster mode (3+ nodes)
+- Mirrored queues
 
 ---
 
@@ -575,7 +710,7 @@ docker logs barsoft-signalrhub
 | **FAZ 4** | ✅ **TAMAMLANDI** | DB Watcher Service + RabbitMQ Producer |
 | **FAZ 5** | ✅ **TAMAMLANDI** | SignalR Hub + RabbitMQ Consumer |
 | **FAZ 6** | ✅ **TAMAMLANDI** | Client demo + User filtering + Test documentation |
-| **FAZ 7** | ⏳ Bekliyor | Full CI/CD pipeline + Deploy docs |
+| **FAZ 7** | ✅ **TAMAMLANDI** | CI/CD pipeline + Deployment documentation |
 
 ---
 
