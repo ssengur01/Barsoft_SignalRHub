@@ -124,7 +124,7 @@ builder.Services.AddCors(options =>
     // Production: Use specific origins
     options.AddPolicy("Production", policy =>
     {
-        policy.WithOrigins("https://yourdomain.com")
+        policy.WithOrigins("http://localhost:5173", "https://yourdomain.com")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -161,6 +161,9 @@ var app = builder.Build();
 
 // ===== HTTP Request Pipeline =====
 
+// CORS must be before authentication (ORDER MATTERS!)
+app.UseCors(builder.Environment.IsDevelopment() ? "AllowAll" : "Production");
+
 // Development middleware
 if (app.Environment.IsDevelopment())
 {
@@ -171,11 +174,9 @@ else
 {
     app.UseExceptionHandler("/error");
     app.UseHsts();
-    app.UseHttpsRedirection(); // Only redirect to HTTPS in production
+    // HTTPS redirection disabled to allow HTTP API calls
+    // app.UseHttpsRedirection();
 }
-
-// CORS
-app.UseCors(builder.Environment.IsDevelopment() ? "AllowAll" : "Production");
 
 // Authentication & Authorization (ORDER MATTERS!)
 app.UseAuthentication();

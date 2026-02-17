@@ -26,6 +26,13 @@ RUN dotnet publish "Barsoft.SignalRHub.DbWatcher.csproj" -c Release -o /app/publ
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+
+# Install Kerberos libraries for SQL Server Windows Authentication
+RUN apt-get update && apt-get install -y \
+    krb5-user \
+    libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=publish /app/publish .
 
