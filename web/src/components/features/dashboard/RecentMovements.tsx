@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { apiService } from '../../../services/api.service';
 import { useEventStore } from '../../../stores/eventStore';
 import type { StokHareketDto } from '../../../types/api.types';
@@ -11,6 +11,7 @@ export const RecentMovements = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const events = useEventStore((state) => state.events);
+  const processedEventCount = useRef(0);
 
   const fetchMovements = async () => {
     try {
@@ -34,47 +35,61 @@ export const RecentMovements = () => {
 
   // Listen to real-time events and refresh table
   useEffect(() => {
-    if (events.length > 0) {
+    // Process ALL new events, not just the latest one
+    const newEventCount = events.length;
+    const unprocessedCount = newEventCount - processedEventCount.current;
+
+    if (unprocessedCount > 0) {
+      console.log(`[RecentMovements] Processing ${unprocessedCount} new event(s)...`);
+
       try {
-        const latestEvent = events[0];
-        console.log('[RecentMovements] New event received, refreshing table...', latestEvent);
+        // Get all new events (from most recent to least recent)
+        const newEvents = events.slice(0, unprocessedCount);
 
-        // Validate event data
-        if (!latestEvent || !latestEvent.data) {
-          console.error('[RecentMovements] Invalid event data:', latestEvent);
-          return;
-        }
+        // Process each new event
+        newEvents.reverse().forEach((event) => {
+          console.log('[RecentMovements] Processing event:', event.type, event.data);
 
-        // Add the new item to the top of the list
-        if (latestEvent.type === 'created') {
-          setMovements((prev) => {
-            const newMovement = latestEvent.data as StokHareketDto;
+          // Validate event data
+          if (!event || !event.data) {
+            console.error('[RecentMovements] Invalid event data:', event);
+            return;
+          }
 
-            // Validate required fields
-            if (!newMovement || typeof newMovement.id === 'undefined') {
-              console.error('[RecentMovements] Invalid movement data:', newMovement);
-              return prev;
-            }
+          // Add the new item to the top of the list
+          if (event.type === 'created') {
+            setMovements((prev) => {
+              const newMovement = event.data as StokHareketDto;
 
-            // Check if already exists
-            if (prev.some(m => m.id === newMovement.id)) {
-              console.log('[RecentMovements] Movement already exists:', newMovement.id);
-              return prev;
-            }
+              // Validate required fields
+              if (!newMovement || typeof newMovement.id === 'undefined') {
+                console.error('[RecentMovements] Invalid movement data:', newMovement);
+                return prev;
+              }
 
-            console.log('[RecentMovements] Adding new movement to top:', newMovement.id);
-            // Add to top and keep only 10
-            return [newMovement, ...prev].slice(0, 10);
-          });
-        } else if (latestEvent.type === 'updated') {
-          setMovements((prev) =>
-            prev.map(m =>
-              m.id === latestEvent.data.id ? latestEvent.data as StokHareketDto : m
-            )
-          );
-        }
+              // Check if already exists
+              if (prev.some(m => m.id === newMovement.id)) {
+                console.log('[RecentMovements] Movement already exists:', newMovement.id);
+                return prev;
+              }
+
+              console.log('[RecentMovements] Adding new movement to top:', newMovement.id);
+              // Add to top and keep only 10
+              return [newMovement, ...prev].slice(0, 10);
+            });
+          } else if (event.type === 'updated') {
+            setMovements((prev) =>
+              prev.map(m =>
+                m.id === event.data.id ? event.data as StokHareketDto : m
+              )
+            );
+          }
+        });
+
+        // Update the processed count
+        processedEventCount.current = newEventCount;
       } catch (error) {
-        console.error('[RecentMovements] Error processing event:', error);
+        console.error('[RecentMovements] Error processing events:', error);
       }
     }
   }, [events]);
