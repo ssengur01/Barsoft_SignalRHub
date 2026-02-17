@@ -34,4 +34,16 @@ public interface IStokHareketRepository
         DateTime startDate,
         DateTime endDate,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// En son N adet kaydı getirir (ID'ye göre azalan sırada)
+    /// Dashboard'da son hareketleri göstermek için kullanılır
+    /// </summary>
+    /// <param name="count">Getirilecek kayıt sayısı</param>
+    /// <param name="subeIds">Şube ID filtreleme (multi-tenant için)</param>
+    /// <param name="cancellationToken">İptal token</param>
+    Task<List<StokHareket>> GetRecentAsync(
+        int count = 10,
+        IEnumerable<int>? subeIds = null,
+        CancellationToken cancellationToken = default);
 }

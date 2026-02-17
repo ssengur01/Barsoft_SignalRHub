@@ -11,9 +11,14 @@ public class StokHareketCreatedEvent
     public string BelgeKodu { get; set; } = string.Empty;
     public DateTime BelgeTarihi { get; set; }
     public decimal Miktar { get; set; }
+    public decimal BirimFiyati { get; set; }
     public decimal ToplamTutar { get; set; }
+    public decimal KdvTutari { get; set; }
+    public string? Aciklama { get; set; }
+    public int DepoId { get; set; }
     public int CreateUserId { get; set; }
     public DateTime CreateDate { get; set; }
+    public DateTime? ChangeDate { get; set; }
 
     /// <summary>
     /// SignalR Group filtreleme için

@@ -1,0 +1,15 @@
+-- Update user 0001 password to BCrypt hash of "password"
+UPDATE TBL_USER_MAIN
+SET [PASSWORD] = '$2a$12$Y8UKHAa.B78U4f2mOCDkXOAXAIdlQk6wYhS.BH3G9i93VAqEdJAmi'
+WHERE USERCODE = '0001';
+
+-- Verify the update
+SELECT
+    USERCODE,
+    [PASSWORD],
+    LEN([PASSWORD]) as PASSWORD_LENGTH,
+    AKTIF,
+    ADMIN,
+    [DESCRIPTION]
+FROM TBL_USER_MAIN
+WHERE USERCODE = '0001';

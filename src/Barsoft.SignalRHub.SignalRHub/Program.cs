@@ -134,6 +134,7 @@ builder.Services.AddCors(options =>
 // ===== Dependency Injection =====
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IStokHareketRepository, StokHareketRepository>();
 
 // ===== Controllers & API =====
 builder.Services.AddControllers();
@@ -170,9 +171,8 @@ else
 {
     app.UseExceptionHandler("/error");
     app.UseHsts();
+    app.UseHttpsRedirection(); // Only redirect to HTTPS in production
 }
-
-app.UseHttpsRedirection();
 
 // CORS
 app.UseCors(builder.Environment.IsDevelopment() ? "AllowAll" : "Production");
