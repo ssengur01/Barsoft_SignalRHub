@@ -138,22 +138,35 @@ public class RabbitMqConsumerService : BackgroundService
         _consumer = new AsyncEventingBasicConsumer(_channel);
         _consumer.Received += async (sender, eventArgs) =>
         {
+            _logger.LogWarning(">>> EVENT HANDLER INVOKED! DeliveryTag: {DeliveryTag}, RoutingKey: {RoutingKey}",
+                eventArgs.DeliveryTag, eventArgs.RoutingKey);
+
             if (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogWarning(">>> Cancellation requested, skipping message");
                 return;
+            }
 
             try
             {
+                _logger.LogWarning(">>> About to call HandleMessageAsync...");
                 await HandleMessageAsync(eventArgs, stoppingToken);
+                _logger.LogWarning(">>> HandleMessageAsync completed successfully!");
 
                 // Acknowledge message
+                _logger.LogWarning(">>> About to ACK message...");
                 _channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+                _logger.LogWarning(">>> Message ACK'd successfully!");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing message. DeliveryTag: {DeliveryTag}", eventArgs.DeliveryTag);
+                _logger.LogError(ex, ">>> EXCEPTION IN EVENT HANDLER! Error processing message. DeliveryTag: {DeliveryTag}", eventArgs.DeliveryTag);
+                _logger.LogError(">>> Exception details: {Message}", ex.Message);
+                _logger.LogError(">>> Stack trace: {StackTrace}", ex.StackTrace);
 
                 // Negative acknowledge - requeue if transient error
                 _channel.BasicNack(eventArgs.DeliveryTag, multiple: false, requeue: false);
+                _logger.LogWarning(">>> Message NACK'd");
             }
         };
 

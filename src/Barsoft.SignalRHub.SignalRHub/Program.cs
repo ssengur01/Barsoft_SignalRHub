@@ -124,7 +124,11 @@ builder.Services.AddCors(options =>
     // Production: Use specific origins
     options.AddPolicy("Production", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "https://yourdomain.com")
+        policy.WithOrigins(
+                "http://localhost:5173",
+                "http://45.13.190.248",        // Production server IP
+                "http://45.13.190.248:80",     // With explicit port
+                "https://yourdomain.com")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
