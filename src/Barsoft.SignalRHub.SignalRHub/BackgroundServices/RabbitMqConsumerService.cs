@@ -22,7 +22,7 @@ public class RabbitMqConsumerService : BackgroundService
     private readonly RabbitMqSettings _settings;
     private IConnection? _connection;
     private IModel? _channel;
-    private EventingBasicConsumer? _consumer;
+    // _consumer removed - using pull-based polling instead
 
     public RabbitMqConsumerService(
         ILogger<RabbitMqConsumerService> logger,
@@ -128,58 +128,77 @@ public class RabbitMqConsumerService : BackgroundService
     }
 
     /// <summary>
-    /// Starts consuming messages from RabbitMQ queue
+    /// Starts consuming messages from RabbitMQ queue using polling
+    /// CHANGED FROM EVENT-DRIVEN TO PULL-BASED POLLING
     /// </summary>
-    private void StartConsuming(CancellationToken stoppingToken)
+    private async void StartConsuming(CancellationToken stoppingToken)
     {
         if (_channel == null)
             throw new InvalidOperationException("RabbitMQ channel is not initialized");
 
-        _consumer = new EventingBasicConsumer(_channel);
-        _consumer.Received += (sender, eventArgs) =>
+        _logger.LogWarning(">>> STARTING PULL-BASED CONSUMER (Polling every 1 second)");
+
+        // Use Task.Run to avoid blocking
+        await Task.Run(async () =>
         {
-            _logger.LogWarning(">>> EVENT HANDLER INVOKED! DeliveryTag: {DeliveryTag}, RoutingKey: {RoutingKey}",
-                eventArgs.DeliveryTag, eventArgs.RoutingKey);
-
-            if (stoppingToken.IsCancellationRequested)
+            while (!stoppingToken.IsCancellationRequested)
             {
-                _logger.LogWarning(">>> Cancellation requested, skipping message");
-                return;
+                try
+                {
+                    // BasicGet: Pull one message from queue
+                    var result = _channel.BasicGet(RabbitMqConstants.StokQueueName, autoAck: false);
+
+                    if (result != null)
+                    {
+                        _logger.LogWarning(">>> PULLED MESSAGE! DeliveryTag: {DeliveryTag}, RoutingKey: {RoutingKey}, Size: {Size} bytes",
+                            result.DeliveryTag, result.RoutingKey, result.Body.Length);
+
+                        try
+                        {
+                            // Convert BasicGetResult to BasicDeliverEventArgs-like structure
+                            var eventArgs = new BasicDeliverEventArgs
+                            {
+                                DeliveryTag = result.DeliveryTag,
+                                RoutingKey = result.RoutingKey,
+                                Exchange = result.Exchange,
+                                Body = result.Body
+                            };
+
+                            _logger.LogWarning(">>> Processing message...");
+                            await HandleMessageAsync(eventArgs, stoppingToken);
+                            _logger.LogWarning(">>> Message processed successfully!");
+
+                            // Manual ACK
+                            _channel.BasicAck(result.DeliveryTag, multiple: false);
+                            _logger.LogWarning(">>> Message ACK'd!");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, ">>> ERROR processing message! DeliveryTag: {DeliveryTag}", result.DeliveryTag);
+                            _channel.BasicNack(result.DeliveryTag, multiple: false, requeue: false);
+                            _logger.LogWarning(">>> Message NACK'd");
+                        }
+                    }
+                    else
+                    {
+                        // No message available, wait before next poll
+                        await Task.Delay(1000, stoppingToken);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogInformation(">>> Consumer polling stopped (cancellation requested)");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, ">>> ERROR in consumer polling loop!");
+                    await Task.Delay(5000, stoppingToken); // Wait before retry
+                }
             }
+        }, stoppingToken);
 
-            try
-            {
-                _logger.LogWarning(">>> About to call HandleMessageAsync...");
-                // Use GetAwaiter().GetResult() to call async method synchronously
-                HandleMessageAsync(eventArgs, stoppingToken).GetAwaiter().GetResult();
-                _logger.LogWarning(">>> HandleMessageAsync completed successfully!");
-
-                // Acknowledge message
-                _logger.LogWarning(">>> About to ACK message...");
-                _channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
-                _logger.LogWarning(">>> Message ACK'd successfully!");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, ">>> EXCEPTION IN EVENT HANDLER! Error processing message. DeliveryTag: {DeliveryTag}", eventArgs.DeliveryTag);
-                _logger.LogError(">>> Exception details: {Message}", ex.Message);
-                _logger.LogError(">>> Stack trace: {StackTrace}", ex.StackTrace);
-
-                // Negative acknowledge - requeue if transient error
-                _channel.BasicNack(eventArgs.DeliveryTag, multiple: false, requeue: false);
-                _logger.LogWarning(">>> Message NACK'd");
-            }
-        };
-
-        _channel.BasicConsume(
-            queue: RabbitMqConstants.StokQueueName,
-            autoAck: false,
-            consumer: _consumer);
-
-        _logger.LogInformation(
-            "Started consuming from queue: {QueueName}, Prefetch: {PrefetchCount}",
-            RabbitMqConstants.StokQueueName,
-            RabbitMqConstants.QueueSettings.PrefetchCount);
+        _logger.LogInformation("Started pull-based consumer for queue: {QueueName}", RabbitMqConstants.StokQueueName);
     }
 
     /// <summary>
