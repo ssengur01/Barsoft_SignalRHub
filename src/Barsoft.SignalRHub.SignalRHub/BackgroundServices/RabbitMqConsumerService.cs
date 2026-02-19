@@ -22,7 +22,7 @@ public class RabbitMqConsumerService : BackgroundService
     private readonly RabbitMqSettings _settings;
     private IConnection? _connection;
     private IModel? _channel;
-    private AsyncEventingBasicConsumer? _consumer;
+    private EventingBasicConsumer? _consumer;
 
     public RabbitMqConsumerService(
         ILogger<RabbitMqConsumerService> logger,
@@ -86,7 +86,7 @@ public class RabbitMqConsumerService : BackgroundService
                     AutomaticRecoveryEnabled = _settings.AutomaticRecoveryEnabled,
                     NetworkRecoveryInterval = TimeSpan.FromSeconds(_settings.NetworkRecoveryIntervalSeconds),
                     RequestedConnectionTimeout = TimeSpan.FromSeconds(_settings.ConnectionTimeoutSeconds),
-                    DispatchConsumersAsync = true // Important for async consumers!
+                    DispatchConsumersAsync = false // Using synchronous EventingBasicConsumer
                 };
 
                 _connection = factory.CreateConnection("Barsoft.SignalRHub.Consumer");
@@ -135,8 +135,8 @@ public class RabbitMqConsumerService : BackgroundService
         if (_channel == null)
             throw new InvalidOperationException("RabbitMQ channel is not initialized");
 
-        _consumer = new AsyncEventingBasicConsumer(_channel);
-        _consumer.Received += async (sender, eventArgs) =>
+        _consumer = new EventingBasicConsumer(_channel);
+        _consumer.Received += (sender, eventArgs) =>
         {
             _logger.LogWarning(">>> EVENT HANDLER INVOKED! DeliveryTag: {DeliveryTag}, RoutingKey: {RoutingKey}",
                 eventArgs.DeliveryTag, eventArgs.RoutingKey);
@@ -150,7 +150,8 @@ public class RabbitMqConsumerService : BackgroundService
             try
             {
                 _logger.LogWarning(">>> About to call HandleMessageAsync...");
-                await HandleMessageAsync(eventArgs, stoppingToken);
+                // Use GetAwaiter().GetResult() to call async method synchronously
+                HandleMessageAsync(eventArgs, stoppingToken).GetAwaiter().GetResult();
                 _logger.LogWarning(">>> HandleMessageAsync completed successfully!");
 
                 // Acknowledge message
